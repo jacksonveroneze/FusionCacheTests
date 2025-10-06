@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using QuotationService;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddDbContext<DefaultDbContext>(options =>
 {
@@ -20,7 +20,7 @@ app.MapGet("/quotations/{quotationId:required}", async (
     [FromServices] DefaultDbContext dbContext, 
     string quotationId) =>
 {
-    await Task.Delay(TimeSpan.FromMilliseconds(500));
+    await Task.Delay(TimeSpan.FromMilliseconds(100));
     
     var quotation = await dbContext.Quotations
         .AsNoTracking()

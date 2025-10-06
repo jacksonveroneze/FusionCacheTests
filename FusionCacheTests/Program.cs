@@ -1,57 +1,92 @@
 using FusionCacheTests;
+using JacksonVeroneze.NET.DistributedCache.Extensions;
+using JacksonVeroneze.NET.HttpClient.Configuration;
+using JacksonVeroneze.NET.HttpClient.Extensions;
+using JacksonVeroneze.NET.Logging.Util;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Distributed;
 using Prometheus;
-using Refit;
+using Serilog;
 using ZiggyCreatures.Caching.Fusion;
-using ZiggyCreatures.Caching.Fusion.Serialization.SystemTextJson;
+
+Log.Logger = BootstrapLogger.CreateLogger();
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
+builder.Host.UseSerilog((hostingContext,
+    services, loggerConfiguration) =>
+{
+    loggerConfiguration
+        .ReadFrom.Configuration(hostingContext.Configuration)
+        .ReadFrom.Services(services);
+});
+
 var url = builder.Configuration.GetValue<string>("QuotationServerUrl");
 
-builder.Services
-    .AddRefitClient<IExternalQuotation>()
-    .ConfigureHttpClient(client => { client.BaseAddress = new Uri(url!); })
-    .AddStandardResilienceHandler();
+HttpClientConfiguration config = new()
+{
+    Name = "ExternalQuotation",
+    Address = url,
+    TimeOutPolicy = new TimeOutPolicyConfiguration
+    {
+        TimeOutMs = 3000
+    }
+};
+
+builder.Services.RefitClientBuilder<IExternalQuotation>(config)
+    .UseHttpClientMetrics();
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = "localhost:6379";
-    options.InstanceName = "FusionCacheTests";
+    options.Configuration = "172.17.0.1:6379";
+    options.InstanceName = "FusionCacheTestsxxx";
 });
 
-builder.Services.AddFusionCache()
-    .WithSerializer(new FusionCacheSystemTextJsonSerializer())
-    .WithDistributedCache(serviceProvider =>
-        serviceProvider.GetRequiredService<IDistributedCache>())
-    .WithDefaultEntryOptions(new FusionCacheEntryOptions()
+builder.Services
+    .AddFusionCacheSystemTextJsonSerializer()
+    .AddFusionCache()
+    .WithRegisteredSerializer()
+    .WithRegisteredDistributedCache()
+    .WithOptions(options => { options.DisableTagging = true; })
+    .WithDefaultEntryOptions(options =>
     {
-        SkipMemoryCacheRead = false,
-        SkipMemoryCacheWrite = false
+        options.EagerRefreshThreshold = 0.8f;
+        options.JitterMaxDuration = TimeSpan.FromSeconds(2);
+        options.AllowBackgroundDistributedCacheOperations = true;
+        options.AllowTimedOutFactoryBackgroundCompletion = true;
     });
 
-builder.Services.AddMemoryCache();
+builder.Services.AddDistributedCacheService();
 
 builder.Services.AddTransient<QuotationService>();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-app.MapGet("/quotation/{tickerId}", async (
+app.MapGet("/quotation-fusion/{tickerId}", async (
     [FromServices] QuotationService quotationService,
     string tickerId,
     CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(tickerId))
-        return Results.BadRequest("tickerId is required.");
-
-    var result = await quotationService.GetByTickerIdAsync(
-        tickerId, cancellationToken)!;
+    var result = await quotationService
+        .GetByTickerIdAsync(
+            tickerId, cancellationToken)!;
 
     return Results.Ok(result);
 });
-// ... existing code ...
 
+app.MapGet("/quotation-distrib/{tickerId}", async (
+    [FromServices] QuotationService quotationService,
+    string tickerId,
+    CancellationToken cancellationToken) =>
+{
+    var result = await quotationService
+        .GetByTickerIdWithoutFusionAsync(
+            tickerId, cancellationToken)!;
+
+    return Results.Ok(result);
+});
+
+app.UseHealthChecks("/health");
 app.UseHttpMetrics();
 app.UseMetricServer();
 

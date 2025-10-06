@@ -1,0 +1,127 @@
+services:
+  load_balancer:
+    container_name: loadbalancer
+    image: traefik:v3.5
+    restart: unless-stopped
+    tty: true
+    command:
+      # EntryPoints
+      - --entrypoints.http.address=:80
+      - --entrypoints.ping.address=:8081
+      - --entrypoints.metrics.address=:8082
+      - --entrypoints.traefik.address=:8083
+
+      # Providers 
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      
+      # API & Dashboard 
+      - --api.dashboard=true
+      - --api.insecure=true
+      
+      # Ping endpoint
+      - --ping=true
+      - --ping.entrypoint=ping
+      
+      # Observability 
+      - --log.level=INFO
+      - --accesslog=true
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entrypoint=metrics
+      - --metrics.prometheus.addServicesLabels=true
+
+      # Timeouts
+      - --serversTransport.forwardingTimeouts.dialTimeout=10s
+      - --serversTransport.forwardingTimeouts.responseHeaderTimeout=10s
+        
+      # Load Balancing
+      - --providers.docker.defaultRule=Host(`localhost`)
+    labels:
+      - traefik.enable=true
+      
+      # Dashboard
+      - traefik.http.routers.dashboard.rule=Host(`localhost`)
+      - traefik.http.routers.dashboard.entrypoints=traefik
+      - traefik.http.routers.dashboard.service=api@internal
+    healthcheck:
+      test: traefik healthcheck --ping
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      - api
+    links:
+      - api
+    ports:
+      - "8080:80"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - status-frota-service
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "2"
+        max-size: "1m"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.50'
+          memory: 256M
+  
+  api:
+    image: 10.0.0.195:50000/fusion-cache-tests:latest
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    labels:
+      - traefik.enable=true
+
+      # Router configuration
+      - traefik.http.routers.api_service.entrypoints=http
+      - traefik.http.routers.api_service.rule=PathPrefix(`/cache-tests`)
+
+      # Service configuration
+      - traefik.http.services.api_service.loadbalancer.server.port=8080
+      - traefik.http.services.api_service.loadbalancer.passhostheader=true
+      - traefik.http.services.api_service.loadbalancer.healthcheck.path=/health?source=traefik
+      - traefik.http.services.api_service.loadbalancer.healthcheck.interval=15s
+      - traefik.http.services.api_service.loadbalancer.healthcheck.timeout=3s
+      - traefik.http.services.api_service.loadbalancer.healthcheck.scheme=http
+
+      # Middlewares definitions
+      - traefik.http.middlewares.strip-prefix.stripprefix.prefixes=/cache-tests
+
+      # Apply middlewares
+      - traefik.http.routers.api_service.middlewares=strip-prefix
+    networks:
+      - status-frota-service
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "2"
+        max-size: "1m"
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '1'
+          memory: '512M'
+          pids: 100
+        reservations:
+          cpus: '1'
+          memory: '512M'
+      mode: replicated
+
+
+networks:
+  status-frota-service:
+    driver: bridge

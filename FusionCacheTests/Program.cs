@@ -1,10 +1,16 @@
 using FusionCacheTests;
+using FusionCacheTests.Application.Contracts;
+using FusionCacheTests.Application.Interfaces;
+using FusionCacheTests.Application.Policies;
+using FusionCacheTests.Application.UseCases;
+using FusionCacheTests.Infra;
 using JacksonVeroneze.NET.DistributedCache.Extensions;
 using JacksonVeroneze.NET.HttpClient.Configuration;
 using JacksonVeroneze.NET.HttpClient.Extensions;
 using JacksonVeroneze.NET.Logging.Util;
 using Microsoft.AspNetCore.Mvc;
 using Prometheus;
+using Refit;
 using Serilog;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -57,29 +63,34 @@ builder.Services
 
 builder.Services.AddDistributedCacheService();
 
-builder.Services.AddTransient<QuotationService>();
+builder.Services.AddTransient<QuotationCacheRepository>();
 builder.Services.AddHealthChecks();
+
+builder.Services.AddScoped<IClock, SystemClock>();
+builder.Services.AddScoped<ICacheTtlPolicy, MarketTtlCalculator>();
+builder.Services.AddScoped<IQuotationCacheRepository, QuotationCacheRepository>();
+builder.Services.AddScoped<ITickersQuotationUseCase, TickersQuotationUseCase>();
+builder.Services.AddScoped<ITickersQuotationUseCase, TickersQuotationUseCase>();
+builder.Services.AddScoped<ITradingCalendar, ConfigTradingCalendar>();
 
 var app = builder.Build();
 
-app.MapGet("/quotation-fusion/{tickerId}", async (
-    [FromServices] QuotationService quotationService,
-    string tickerId,
+app.MapGet("/quotation-fusion", async (
+    [FromServices] ITickersQuotationUseCase useCase,
     CancellationToken cancellationToken) =>
 {
-    var result = await quotationService
-        .GetByTickerIdAsync(
-            tickerId, cancellationToken)!;
+    var result = await useCase
+        .GetDataAsync(cancellationToken);
 
     return Results.Ok(result);
 });
 
 app.MapGet("/quotation-distrib/{tickerId}", async (
-    [FromServices] QuotationService quotationService,
+    [FromServices] QuotationCacheRepository quotationCacheRepository,
     string tickerId,
     CancellationToken cancellationToken) =>
 {
-    var result = await quotationService
+    var result = await quotationCacheRepository
         .GetByTickerIdWithoutFusionAsync(
             tickerId, cancellationToken)!;
 

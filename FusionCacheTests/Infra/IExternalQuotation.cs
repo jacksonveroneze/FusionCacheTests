@@ -1,11 +1,12 @@
+using FusionCacheTests.Domain;
 using Refit;
 
-namespace FusionCacheTests;
+namespace FusionCacheTests.Infra;
 
 public interface IExternalQuotation
 {
     [Get("/quotations/{tickerId}")]
-    Task<Quotation> GetValueAsync(
+    Task<Quotation> GetByTickerIdAsync(
         [AliasAs("tickerId")] string ticker,
         CancellationToken cancellationToken=default);
 }

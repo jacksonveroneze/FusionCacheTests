@@ -1,30 +1,24 @@
+using FusionCacheTests.Application.Contracts;
+using FusionCacheTests.Application.Interfaces;
+using FusionCacheTests.Application.Policies;
+using FusionCacheTests.Domain;
 using JacksonVeroneze.NET.Cache.Interfaces;
 using ZiggyCreatures.Caching.Fusion;
 
-namespace FusionCacheTests;
+namespace FusionCacheTests.Infra;
 
-public class QuotationService(
+public class QuotationCacheRepository(
     IFusionCache cache,
     ICacheService cacheService,
-    IExternalQuotation externalQuotation)
+    IExternalQuotation externalQuotation) : IQuotationCacheRepository
 {
     private readonly TimeSpan _duration = TimeSpan.FromSeconds(10);
 
     public ValueTask<Quotation> GetByTickerIdAsync(
         string tickerId,
+        TimeSpan ttl,
         CancellationToken cancellationToken = default)
     {
-        var marketOpen = TimeSpan.FromHours(10);
-        var marketClose = TimeSpan.FromHours(18);
-        var openTtl = TimeSpan.FromSeconds(15);
-
-        var ttlOptions = new TtlPolicyOptions(
-            marketOpen, marketClose, openTtl);
-
-        var ttlCalculator = new MarketTtlCalculator(ttlOptions);
-
-        var ttl = ttlCalculator.Compute(DateTimeOffset.Now);
-
         var cacheKey = GetCacheKey(tickerId);
 
         return cache.GetOrSetAsync(
@@ -32,7 +26,7 @@ public class QuotationService(
             async ct =>
             {
                 var external = await externalQuotation
-                    .GetValueAsync(tickerId, ct);
+                    .GetByTickerIdAsync(tickerId, ct);
 
                 return external;
             },
@@ -41,7 +35,7 @@ public class QuotationService(
                 options
                     // ⏳ Tempo de vida principal do item no cache.
                     // Após esse período o item expira e precisa ser renovado.
-                    .SetDuration(ttl.Ttl)
+                    .SetDuration(ttl)
 
                     // ⏱️ Define os timeouts de execução do factory (requisição externa).
                     // - softTimeout: tempo máximo de espera "ideal".
@@ -99,7 +93,7 @@ public class QuotationService(
                 entry.AbsoluteExpirationRelativeToNow = _duration;
 
                 var external = await externalQuotation
-                    .GetValueAsync(tickerId, cancellationToken);
+                    .GetByTickerIdAsync(tickerId, cancellationToken);
 
                 return external;
             }, cancellationToken);

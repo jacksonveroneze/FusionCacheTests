@@ -44,19 +44,59 @@ builder.Services.RefitClientBuilder<IExternalQuotation>(config)
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = "172.17.0.1:6379";
-    options.InstanceName = "FusionCacheTestsxxx";
+    options.InstanceName = "FusionCacheTests";
 });
 
 builder.Services
     .AddFusionCacheSystemTextJsonSerializer()
-    .AddFusionCache()
+    .AddFusionCache(cacheName: "Quotation")
     .WithRegisteredSerializer()
     .WithRegisteredDistributedCache()
     .WithOptions(options => { options.DisableTagging = true; })
+    .WithCacheKeyPrefix("KeyPrefix:Quotation:")
     .WithDefaultEntryOptions(options =>
     {
-        options.EagerRefreshThreshold = 0.8f;
-        options.JitterMaxDuration = TimeSpan.FromSeconds(2);
+        options.IsFailSafeEnabled = true;
+        options.Duration = TimeSpan.FromMinutes(5);
+        options.FailSafeMaxDuration = TimeSpan.FromMinutes(10);
+        options.FailSafeThrottleDuration = TimeSpan.FromMinutes(11);
+
+        options.EagerRefreshThreshold = 0.9f;
+
+        options.JitterMaxDuration = TimeSpan.FromSeconds(12);
+
+        options.FactorySoftTimeout = TimeSpan.FromSeconds(13);
+        options.FactoryHardTimeout = TimeSpan.FromSeconds(14);
+        options.DistributedCacheSoftTimeout = TimeSpan.FromSeconds(15);
+        options.DistributedCacheHardTimeout = TimeSpan.FromSeconds(16);
+
+        options.AllowBackgroundDistributedCacheOperations = true;
+        options.AllowTimedOutFactoryBackgroundCompletion = true;
+    });
+
+builder.Services
+    .AddFusionCacheSystemTextJsonSerializer()
+    .AddFusionCache(cacheName: "Teste")
+    .WithRegisteredSerializer()
+    .WithRegisteredDistributedCache()
+    .WithOptions(options => { options.DisableTagging = true; })
+    .WithCacheKeyPrefix("KeyPrefix:Teste:")
+    .WithDefaultEntryOptions(options =>
+    {
+        options.IsFailSafeEnabled = true;
+        options.Duration = TimeSpan.FromMinutes(5);
+        options.FailSafeMaxDuration = TimeSpan.FromMinutes(10);
+        options.FailSafeThrottleDuration = TimeSpan.FromMinutes(11);
+
+        options.EagerRefreshThreshold = 0.9f;
+
+        options.JitterMaxDuration = TimeSpan.FromSeconds(12);
+
+        options.FactorySoftTimeout = TimeSpan.FromSeconds(13);
+        options.FactoryHardTimeout = TimeSpan.FromSeconds(14);
+        options.DistributedCacheSoftTimeout = TimeSpan.FromSeconds(15);
+        options.DistributedCacheHardTimeout = TimeSpan.FromSeconds(16);
+
         options.AllowBackgroundDistributedCacheOperations = true;
         options.AllowTimedOutFactoryBackgroundCompletion = true;
     });

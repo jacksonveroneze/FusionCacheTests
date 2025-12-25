@@ -25,6 +25,17 @@
         <PackageReference Include="JacksonVeroneze.NET.Logging" Version="1.0.5"/>
         <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0"/>
         <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0"/>
+
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.Process" Version="1.14.0-beta.2"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.14.0-beta.1"/>
+        <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.14.0"/>
+        <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.14.0-beta.1"/>
+        <PackageReference Include="ZiggyCreatures.FusionCache.OpenTelemetry" Version="2.4.0"/>
     </ItemGroup>
 
 </Project>

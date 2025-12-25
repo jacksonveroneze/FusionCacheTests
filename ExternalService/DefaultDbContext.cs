@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace QuotationService;
+namespace ExternalService;
 
 public class DefaultDbContext(
     DbContextOptions<DefaultDbContext> options)

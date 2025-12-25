@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ExternalService\ExternalService.csproj" />
+  <Project Path="FusionCacheTests/FusionCacheTests.csproj" />
+</Solution>

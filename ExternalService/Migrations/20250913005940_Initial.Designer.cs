@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using QuotationService;
+using ExternalService;
 
 #nullable disable
 
-namespace QuotationService.Migrations
+namespace ExternalService.Migrations
 {
     [DbContext(typeof(DefaultDbContext))]
     [Migration("20250913005940_Initial")]

@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace QuotationService.Migrations
+namespace ExternalService.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration

@@ -10,15 +10,16 @@
         <PackageReference Include="JacksonVeroneze.NET.DistributedCache" Version="1.0.15" />
         <PackageReference Include="JacksonVeroneze.NET.HttpClient" Version="1.1.0" />
         <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.8" />
-        <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.4.0" />
-        <PackageReference Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" Version="2.4.0" />
-        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.CysharpMemoryPack" Version="2.4.0" />
-        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.NeueccMessagePack" Version="2.4.0" />
-        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.SystemTextJson" Version="2.4.0" />
+        <PackageReference Include="Polly.Extensions" Version="8.6.5" />
+        <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
+        <PackageReference Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" Version="2.6.0" />
+        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.CysharpMemoryPack" Version="2.6.0" />
+        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.NeueccMessagePack" Version="2.6.0" />
+        <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.SystemTextJson" Version="2.6.0" />
 
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.8"/>
-        <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.8.0" />
-        <PackageReference Include="Microsoft.Extensions.Resilience" Version="9.8.0" />
+        <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.3.0" />
+        <PackageReference Include="Microsoft.Extensions.Resilience" Version="10.3.0" />
         <PackageReference Include="Refit.HttpClientFactory" Version="8.0.0" />
         <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
 

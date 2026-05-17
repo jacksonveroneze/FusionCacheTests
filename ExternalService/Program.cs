@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using ExternalService;
 using JacksonVeroneze.NET.Logging.Util;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Serilog;
 
 Log.Logger = BootstrapLogger.CreateLogger();
@@ -26,21 +27,52 @@ builder.Services.AddDbContext<DefaultDbContext>(options =>
         .UseSnakeCaseNamingConvention();
 });
 
+// builder.Services.AddRequestTimeouts(
+//     conf => conf.DefaultPolicy = new RequestTimeoutPolicy()
+// {
+//     Timeout = TimeSpan.FromSeconds(1)
+// });
+
 var app = builder.Build();
 
 app.MapGet("/quotations/{quotationId:required}", async (
+    [FromServices] ILogger<Program> logger,
     [FromServices] DefaultDbContext dbContext,
-    [FromRoute] string quotationId) =>
+    [FromRoute] string quotationId,
+    [FromQuery(Name = "timeout")] int timeout,
+    CancellationToken cancellationToken) =>
 {
-    await Task.Delay(TimeSpan.FromMilliseconds(100));
-
-    var quotation = await dbContext.Quotations
+    cancellationToken.Register(() =>
+        logger.LogWarning("CancellationToken foi cancelado (RequestAborted)."));
+    
+    await dbContext.Quotations
         .AsNoTracking()
-        .FirstOrDefaultAsync(opt => opt.TickerId == quotationId);
+        .FirstOrDefaultAsync(opt => opt.TickerId == quotationId, cancellationToken);
+    
+    logger.LogInformation("Antes do delay. IsCancellationRequested: {IsCancellationRequested}",
+        cancellationToken.IsCancellationRequested);    
+    
+        await Task.Delay(TimeSpan.FromMilliseconds(timeout), cancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(1), cancellationToken);
+    
 
-    return quotation is null
-        ? Results.NotFound()
-        : Results.Ok(quotation);
+    logger.LogInformation("Depois do delay. IsCancellationRequested: {IsCancellationRequested}",
+        cancellationToken.IsCancellationRequested);    
+    
+    try
+    {
+        var quotation = await dbContext.Quotations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(opt => opt.TickerId == quotationId, cancellationToken);
+
+        return quotation is null ? Results.NotFound() : Results.Ok(quotation);
+    }
+    catch (OperationCanceledException oce) when (cancellationToken.IsCancellationRequested)
+    {
+        logger.LogWarning(oce, "Consulta cancelada porque o cliente abortou a request.");
+        throw; // deixa o ASP.NET finalizar como request abortada (499)
+    }
+
 });
 
 app.MapGet("/cms/{contentId:required}", async (
@@ -57,6 +89,8 @@ app.MapGet("/cms/{contentId:required}", async (
         : Results.Ok(new Cms(contentId, $"Content_{contentId}"));
 });
 
+app.UseRouting();
+// app.UseRequestTimeouts();
 app.UseHttpMetrics();
 app.UseMetricServer();
 

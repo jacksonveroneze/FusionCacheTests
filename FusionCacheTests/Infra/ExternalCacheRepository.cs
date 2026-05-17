@@ -7,10 +7,11 @@ namespace FusionCacheTests.Infra;
 
 public class ExternalCacheRepository(
     IFusionCache cacheInstance,
+    IFusionCacheProvider cacheInstanceProvider,
     ICacheService cacheService,
     IExternalService externalService) : IExternalCacheRepository
 {
-    private readonly TimeSpan _duration = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _duration = TimeSpan.FromMilliseconds(100);
 
     #region Quotation
 
@@ -28,26 +29,6 @@ public class ExternalCacheRepository(
                     .GetTickerByIdAsync(tickerId, ct);
 
                 return external;
-            },
-            options =>
-            {
-                options
-                    .SetDuration(duration: TimeSpan.FromMilliseconds(200))
-                    .SetJittering(TimeSpan.FromSeconds(1))
-                    .SetEagerRefresh(0.5f)
-                    .SetFailSafe(
-                        isEnabled: true,
-                        maxDuration: TimeSpan.FromMinutes(30),
-                        throttleDuration: TimeSpan.FromSeconds(30)
-                    )
-                    .SetFactoryTimeouts(
-                        softTimeout: TimeSpan.FromMilliseconds(200),
-                        hardTimeout: TimeSpan.FromMilliseconds(600)
-                    )
-                    .SetDistributedCacheTimeouts(
-                        softTimeout: TimeSpan.FromMilliseconds(200),
-                        hardTimeout: TimeSpan.FromMilliseconds(600)
-                    );
             },
             token: cancellationToken)!;
     }
@@ -82,11 +63,14 @@ public class ExternalCacheRepository(
     public ValueTask<Cms?> GetContentByIdWithFusionAsync(
         string contentId,
         string faultMode,
+        string skipCache,
         CancellationToken cancellationToken = default)
     {
         var cacheKey = GetCmsCacheKey(contentId);
-
-        return cacheInstance.GetOrSetAsync(
+        
+        var instanceFusionCache = cacheInstanceProvider.GetCache("Cms");
+        
+        return instanceFusionCache.GetOrSetAsync(
             cacheKey,
             ct =>
             {
@@ -94,26 +78,6 @@ public class ExternalCacheRepository(
                     .GetContentByIdAsync(contentId, faultMode, ct);
 
                 return external;
-            },
-            options =>
-            {
-                options
-                    .SetDuration(duration: TimeSpan.FromSeconds(30))
-                    .SetJittering(TimeSpan.FromSeconds(1))
-                    .SetEagerRefresh(0.8f)
-                    .SetFailSafe(
-                        isEnabled: true,
-                        maxDuration: TimeSpan.FromMinutes(5),
-                        throttleDuration: TimeSpan.FromSeconds(10)
-                    )
-                    .SetFactoryTimeouts(
-                        softTimeout: TimeSpan.FromMilliseconds(200),
-                        hardTimeout: TimeSpan.FromMilliseconds(2_000)
-                    )
-                    .SetDistributedCacheTimeouts(
-                        softTimeout: TimeSpan.FromMilliseconds(500),
-                        hardTimeout: TimeSpan.FromMilliseconds(1_000)
-                    );
             },
             token: cancellationToken)!;
     }

@@ -34,7 +34,12 @@ public static class OpenTelemetryExtensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                .AddFusionCacheInstrumentation()
+                .AddFusionCacheInstrumentation(conf =>
+                {
+                    conf.IncludeMemoryLevel = true;
+                    conf.IncludeDistributedLevel = true;
+                })
+                .AddMeter("Polly") 
                 .AddPrometheusExporter());
 
             return builder;
@@ -49,9 +54,6 @@ public static class OpenTelemetryExtensions
                     .AddRedisInstrumentation()
                     .AddFusionCacheInstrumentation(options => { options.IncludeMemoryLevel = true; })
                     .AddSource();
-
-                conf.AddOtlpExporter(config => config.Endpoint =
-                    new Uri("http://10.0.0.150:4317"));
             });
 
             return builder;

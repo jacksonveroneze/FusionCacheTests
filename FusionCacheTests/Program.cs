@@ -1,11 +1,16 @@
 using FusionCacheTests;
 using FusionCacheTests.Application.Interfaces;
+using FusionCacheTests.Domain;
+using FusionCacheTests.Factories;
 using FusionCacheTests.Infra;
 using JacksonVeroneze.NET.DistributedCache.Extensions;
 using JacksonVeroneze.NET.HttpClient.Configuration;
 using JacksonVeroneze.NET.HttpClient.Extensions;
 using JacksonVeroneze.NET.Logging.Util;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Http.Resilience;
+using Polly;
+using Polly.Telemetry;
 using Prometheus;
 using Serilog;
 using ZiggyCreatures.Caching.Fusion;
@@ -35,74 +40,78 @@ HttpClientConfiguration config = new()
 };
 
 builder.Services.RefitClientBuilder<IExternalService>(config)
-    .UseHttpClientMetrics();
+    .UseHttpClientMetrics()
+    .AddResilienceHandler("custom", pipeline =>
+    {
+        pipeline.AddTimeout(TimeSpan.FromSeconds(1));
+
+        pipeline.AddRetry(new HttpRetryStrategyOptions
+        {
+            MaxRetryAttempts = 1,
+            BackoffType = DelayBackoffType.Exponential,
+            UseJitter = true,
+            Delay = TimeSpan.FromMilliseconds(100)
+        });
+
+        pipeline.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions()
+        {
+            FailureRatio = 0.1,
+            SamplingDuration = TimeSpan.FromSeconds(1),
+            MinimumThroughput = 3,
+            BreakDuration = TimeSpan.FromSeconds(30)
+        });
+
+        var telemetryOptions = new TelemetryOptions
+        {
+            LoggerFactory = LoggerFactory.Create(builder1 => builder1.AddConsole())
+        };
+
+        pipeline.ConfigureTelemetry(telemetryOptions);
+    });
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = "172.17.0.1:6379";
+    options.Configuration = "172.17.0.1:16379";
     options.InstanceName = "FusionCacheTests";
 });
 
 builder.Services
-    .AddFusionCacheSystemTextJsonSerializer()
+    .AddFusionCacheSystemTextJsonSerializer();
+
+var cacheQuotationSettings =
+    builder.Configuration
+        .GetSection("Cache:Quotation")
+        .Get<FusionCacheEntryOptionsSettings>()
+    ?? new FusionCacheEntryOptionsSettings();
+
+var cacheCmsSettings =
+    builder.Configuration
+        .GetSection("Cache:Cms")
+        .Get<FusionCacheEntryOptionsSettings>()
+    ?? new FusionCacheEntryOptionsSettings();
+
+builder.Services
     .AddFusionCache(cacheName: "Quotation")
     .WithRegisteredSerializer()
     .WithRegisteredDistributedCache()
     .WithOptions(options => { options.DisableTagging = true; })
     .WithCacheKeyPrefix("KeyPrefix:Quotation:")
-    .WithDefaultEntryOptions(options =>
-    {
-        options.IsFailSafeEnabled = true;
-        options.Duration = TimeSpan.FromMinutes(5);
-        options.FailSafeMaxDuration = TimeSpan.FromMinutes(10);
-        options.FailSafeThrottleDuration = TimeSpan.FromMinutes(11);
-
-        options.EagerRefreshThreshold = 0.9f;
-
-        options.JitterMaxDuration = TimeSpan.FromSeconds(12);
-
-        options.FactorySoftTimeout = TimeSpan.FromSeconds(13);
-        options.FactoryHardTimeout = TimeSpan.FromSeconds(14);
-        options.DistributedCacheSoftTimeout = TimeSpan.FromSeconds(15);
-        options.DistributedCacheHardTimeout = TimeSpan.FromSeconds(16);
-
-        options.AllowBackgroundDistributedCacheOperations = true;
-        options.AllowTimedOutFactoryBackgroundCompletion = true;
-    });
+    .WithDefaultEntryOptions(options => options.ConfigureOptions(cacheQuotationSettings));
 
 builder.Services
-    .AddFusionCacheSystemTextJsonSerializer()
     .AddFusionCache(cacheName: "Cms")
     .WithRegisteredSerializer()
     .WithRegisteredDistributedCache()
     .WithOptions(options => { options.DisableTagging = true; })
     .WithCacheKeyPrefix("KeyPrefix:Content:")
-    .WithDefaultEntryOptions(options =>
-    {
-        options.IsFailSafeEnabled = true;
-        options.Duration = TimeSpan.FromMinutes(1);
-        options.FailSafeMaxDuration = TimeSpan.FromMinutes(10);
-        options.FailSafeThrottleDuration = TimeSpan.FromMinutes(11);
-
-        options.EagerRefreshThreshold = 0.9f;
-
-        options.JitterMaxDuration = TimeSpan.FromSeconds(2);
-
-        options.FactorySoftTimeout = TimeSpan.FromMilliseconds(3_000);
-        options.FactoryHardTimeout = TimeSpan.FromMilliseconds(14);
-        options.DistributedCacheSoftTimeout = TimeSpan.FromSeconds(1);
-        options.DistributedCacheHardTimeout = TimeSpan.FromSeconds(1);
-
-        options.AllowBackgroundDistributedCacheOperations = true;
-        options.AllowTimedOutFactoryBackgroundCompletion = true;
-    });
+    .WithDefaultEntryOptions(options => options.ConfigureOptions(cacheCmsSettings));
 
 builder.Services
-    .AddFusionCacheSystemTextJsonSerializer()
     .AddFusionCache()
     .WithRegisteredSerializer()
     .WithRegisteredDistributedCache()
-    .WithOptions(options => { options.DisableTagging = true; });
+    .WithOptions(options => { options.DisableTagging = true; })
+    .WithDefaultEntryOptions(options => options.ConfigureOptions(new FusionCacheEntryOptionsSettings()));
 
 builder.Services.AddDistributedCacheService();
 
@@ -119,9 +128,11 @@ app.MapGet("/quotation-with-fusion/{tickerId}", async (
     string tickerId,
     CancellationToken cancellationToken) =>
 {
-    var result = await externalCacheRepository
+    ValueTask<Quotation?> task = externalCacheRepository
         .GetByTickerIdWithFusionAsync(
             tickerId, cancellationToken)!;
+
+    var result = await task;
 
     return Results.Ok(result);
 });
@@ -143,6 +154,7 @@ app.MapGet("/bff-content", async (
     [FromQuery] string contentId,
     [FromQuery] string faultMode,
     [FromQuery] string useFusion,
+    [FromQuery] string skipCache,
     CancellationToken cancellationToken) =>
 {
     if (useFusion.Equals("false"))
@@ -154,11 +166,25 @@ app.MapGet("/bff-content", async (
         return Results.Ok(result1);
     }
 
-    var result2 = await externalCacheRepository
+    Task.Delay(TimeSpan.FromMilliseconds(2000)).Wait();
+    
+    var result2 = externalCacheRepository
         .GetContentByIdWithFusionAsync(
-            contentId, faultMode, cancellationToken)!;
+            contentId, faultMode, skipCache, cancellationToken)!.Result;
 
     return Results.Ok(result2);
+});
+
+app.MapGet("/bff-content-direct", async (
+    [FromServices] IExternalService externalService,
+    [FromQuery] string contentId,
+    [FromQuery] string faultMode,
+    [FromQuery] string useFusion,
+    CancellationToken cancellationToken) =>
+{
+    var result= await externalService.GetContentByIdAsync(contentId, faultMode, cancellationToken);
+
+    return Results.Ok(result);
 });
 
 app.MapGet("/content-without-fusion/{contentId}", async (
@@ -175,8 +201,8 @@ app.MapGet("/content-without-fusion/{contentId}", async (
 });
 
 app.UseHealthChecks("/health");
-app.UseHttpMetrics();
-app.UseMetricServer();
+// app.UseHttpMetrics();
+// app.UseMetricServer();
 app.UseDeveloperExceptionPage();
 app.UseOpenTelemetryPrometheusScrapingEndpoint("metrics-open");
 

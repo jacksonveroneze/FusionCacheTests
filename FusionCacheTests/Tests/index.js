@@ -9,11 +9,8 @@ export const options = {
             startVUs: 0,
             stages: [
                 {duration: "5s", target: 5},
-                {duration: "55s", target: 50},
-                {duration: "60s", target: 100},
-                {duration: "60s", target: 100},
-                {duration: "60s", target: 200},
-                {duration: "60s", target: 200},
+                {duration: "120s", target: 250},
+                {duration: "120s", target: 500}
             ],
             gracefulRampDown: "0s",
         },
@@ -36,15 +33,15 @@ export default function () {
     const t = elapsedMs / 1000;
 
     let faultMode = "normal";
-    const inErrorWindow =
-        (t >= 80 && t < 130) ||
-        (t >= 200 && t < 230);
-
-    if (inErrorWindow) faultMode = "error";
+    // const inErrorWindow =
+    //     (t >= 20 && t < 50) ||
+    //     (t >= 80 && t < 90);
+    //
+    // if (inErrorWindow) faultMode = "error";
 
     const baseUrl = "http://localhost:7000";
 
-    const url = `${baseUrl}/bff-content?contentId=${contentId}&faultMode=${faultMode}&useFusion=true`;
+    const url = `${baseUrl}/bff-content?contentId=${contentId}&faultMode=${faultMode}&useFusion=true&skipCache=false`;
 
     var res = http.get(url);
 

@@ -15,6 +15,7 @@ public interface IExternalCacheRepository
     ValueTask<Cms?> GetContentByIdWithFusionAsync(
         string contentId,
         string faultMode,
+        string skipCache,
         CancellationToken cancellationToken = default);
 
     Task<Cms?> GetContentByIdWithoutFusionAsync(
